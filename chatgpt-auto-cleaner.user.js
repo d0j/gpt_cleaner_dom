@@ -1,51 +1,54 @@
 // ==UserScript==
-// @name         ChatGPT DOM Pruner (Optimized)
+// @name         ChatGPT DOM Pruner
 // @namespace    https://example.com/chatgpt-pruner
-// @version      1.1
-// @description  Убирает лишние <article>-сообщения, чтобы ChatGPT не лагал.
-//               Настройте «KEEP_MESSAGES», если нужно хранить больше/меньше.
-// @match        *://chat.openai.com/*
+// @version      1.2
+// @description  Удаляет старые сообщения в ChatGPT, снижавая нагрузку на DOM.
 // @match        *://chatgpt.com/*
-// @run-at       document-end          // запускаемся, когда DOM уже собран
-// @grant        none                  // AdGuard / Greasemonkey совместимы
+// @match        *://chat.openai.com/*
+// @run-at       document-end
+// @grant        none
 // ==/UserScript==
 
 (() => {
   'use strict';
 
-  /* ---------- КОНФИГ ---------- */
-  const KEEP_MESSAGES = 30;                           // Сколько последних сообщений оставлять
-  const SELECTOR      = 'article[data-testid^="conversation-turn-"]';
+  /* ======== ПАРАМЕТРЫ ======== */
+  const KEEP_MESSAGES = 30;                       // сколько последних сообщений оставляем
+  const NODE_SELECTOR = 'article[data-testid^="conversation-turn-"]';
 
-  /* ---------- ВНУТРЕННЕЕ СОСТОЯНИЕ ---------- */
-  let rafScheduled = false;                           // флаг для throttling MutationObserver
+  /* ======== ВНУТРЕННЕЕ ======= */
+  let rafLock = false;
+  let originalTitle = document.title;
+  let currentPath   = location.pathname;
 
-  /* ---------- ФУНКЦИЯ ОЧИСТКИ ---------- */
+  /* ======== ГЛАВНАЯ ФУНКЦИЯ ======== */
   function pruneDom() {
-    const nodes = document.querySelectorAll(SELECTOR);   // статический NodeList
-    const extra = nodes.length - KEEP_MESSAGES;          // сколько нужно убрать
-    if (extra <= 0) return;                              // всё ок
+    const nodes = document.querySelectorAll(NODE_SELECTOR);
+    const surplus = nodes.length - KEEP_MESSAGES;
+    if (surplus <= 0) return;
 
-    for (let i = 0; i < extra; i++) {                    // удаляем самые старые
-      const n = nodes[i];
-      if (n?.isConnected) n.remove();
-    }
-    // Обновляем заголовок вкладки — видно, сколько осталось
-    document.title = `[${KEEP_MESSAGES}] ChatGPT`;
+    for (let i = 0; i < surplus; i++) nodes[i].remove();
+    console.log(`[DOM-Pruner] removed ${surplus}, left ${nodes.length - surplus}`);
+
+    document.title = `[${nodes.length - surplus}] ${originalTitle}`;
+    window.dispatchEvent(new Event('resize'));
   }
 
-  /* ---------- НАБЛЮДАТЕЛЬ С ТРОТТЛИНГОМ ---------- */
-  const observer = new MutationObserver(() => {
-    if (!rafScheduled) {                                // не чаще одного кадра
-      rafScheduled = true;
-      requestAnimationFrame(() => {
-        rafScheduled = false;
-        pruneDom();
-      });
+  /* ======== НАБЛЮДАТЕЛЬ ======== */
+  new MutationObserver(() => {
+    if (!rafLock) {
+      rafLock = true;
+      requestAnimationFrame(() => { rafLock = false; pruneDom(); });
     }
-  });
+  }).observe(document.body, { childList: true, subtree: true });
 
-  /* ---------- ИНИЦИАЛИЗАЦИЯ ---------- */
-  observer.observe(document.body, { childList: true, subtree: true });
-  pruneDom();                                           // «первый проход» после загрузки
+  pruneDom();   // «первый проход»
+
+  /* ======== ОТСЛЕЖИВАЕМ URL SPA-навигации ======== */
+  setInterval(() => {
+    if (location.pathname !== currentPath) {
+      currentPath = location.pathname;
+      setTimeout(pruneDom, 1000); // ждём, пока React дорисует новый чат
+    }
+  }, 3000);
 })();
