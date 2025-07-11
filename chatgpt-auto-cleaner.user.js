@@ -2,7 +2,7 @@
 // @name         ChatGPT DOM Pruner
 // @namespace    https://example.com/chatgpt-pruner
 // @version      1.2
-// @description  Удаляет старые сообщения в ChatGPT, снижавая нагрузку на DOM.
+// @description  Удаляет старые сообщения в ChatGPT, снижая нагрузку на DOM.
 // @match        *://chatgpt.com/*
 // @match        *://chat.openai.com/*
 // @run-at       document-end
